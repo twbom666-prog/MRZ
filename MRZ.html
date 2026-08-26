@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>MRZ 產生 / 驗證工具</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+
+  :root{
+    --ink: #0e1a2b;
+    --ink-2: #14263d;
+    --paper: #f2ede1;
+    --paper-line: #d8cfb8;
+    --gold: #b8923f;
+    --gold-bright: #e0b45a;
+    --ok: #4f9d69;
+    --bad: #c1503f;
+    --muted: #8a94a3;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background: radial-gradient(ellipse at top, #1b304a 0%, var(--ink) 55%, #060c15 100%);
+    color: var(--paper);
+    font-family: 'IBM Plex Sans', sans-serif;
+    min-height:100vh;
+    padding: 32px 20px 60px;
+  }
+  .wrap{ max-width: 880px; margin: 0 auto; }
+
+  header{
+    display:flex; align-items:flex-end; justify-content:space-between;
+    border-bottom: 1px solid rgba(224,180,90,0.25);
+    padding-bottom: 18px; margin-bottom: 28px;
+    flex-wrap: wrap; gap: 10px;
+  }
+  .brand{ display:flex; align-items:center; gap:12px; }
+  .brand-mark{
+    width: 34px; height: 34px; border: 1.5px solid var(--gold-bright);
+    border-radius: 50%; display:flex; align-items:center; justify-content:center;
+    font-family:'Space Mono',monospace; font-size:13px; color:var(--gold-bright);
+    flex-shrink:0;
+  }
+  h1{ font-size: 19px; margin:0; font-weight:600; letter-spacing:0.02em; }
+  .sub{ color: var(--muted); font-size: 12.5px; margin-top:3px; }
+  .icao{ font-family:'Space Mono',monospace; font-size:11px; color: var(--gold); letter-spacing:0.06em; text-align:right; }
+
+  .card{
+    background: linear-gradient(180deg, #16283f, #0f1f33);
+    border: 1px solid rgba(224,180,90,0.18);
+    border-radius: 6px;
+    padding: 22px 22px 24px;
+    margin-bottom: 22px;
+    position:relative;
+  }
+  .card::before{
+    content:"";
+    position:absolute; left:0; top:0; bottom:0; width:3px;
+    background: linear-gradient(180deg, var(--gold-bright), transparent);
+    border-radius: 6px 0 0 6px;
+  }
+  .card h2{
+    font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.12em;
+    color: var(--gold-bright); margin: 0 0 16px 0; font-weight:600;
+  }
+
+  .grid{ display:grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; }
+  .grid.g3{ grid-template-columns: 1fr 1fr 1fr; }
+  .field{ display:flex; flex-direction:column; gap:5px; }
+  .field.full{ grid-column: 1 / -1; }
+  label{ font-size: 11px; color: var(--muted); letter-spacing:0.03em; }
+  input, select, textarea{
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 4px;
+    color: var(--paper);
+    padding: 9px 10px;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 13.5px;
+    outline:none;
+  }
+  input:focus, select:focus, textarea:focus{ border-color: var(--gold-bright); }
+  textarea{ font-family:'Space Mono',monospace; resize: vertical; min-height: 74px; letter-spacing:0.03em; }
+
+  button{
+    background: var(--gold-bright);
+    color: var(--ink);
+    border:none; border-radius:4px;
+    padding: 10px 18px;
+    font-weight:700; font-size:13px;
+    cursor:pointer;
+    letter-spacing:0.02em;
+    transition: transform 0.1s ease, background 0.15s ease;
+  }
+  button:hover{ background:#f0c56c; }
+  button:active{ transform: scale(0.98); }
+  button.secondary{
+    background:transparent; color:var(--gold-bright);
+    border: 1px solid var(--gold-bright);
+  }
+  button.secondary:hover{ background: rgba(224,180,90,0.1); }
+  .actions{ display:flex; gap:10px; margin-top:18px; flex-wrap:wrap; }
+
+  .mrz-output{
+    margin-top: 18px;
+    background: var(--paper);
+    border-radius: 5px;
+    padding: 18px 18px 14px;
+    position: relative;
+    overflow:hidden;
+  }
+  .mrz-output::after{
+    content:"SPECIMEN"; position:absolute; top:38%; left:50%;
+    transform: translate(-50%,-50%) rotate(-18deg);
+    font-size: 42px; font-weight:700; color: rgba(193,80,63,0.14);
+    letter-spacing: 0.1em; pointer-events:none; white-space:nowrap;
+  }
+  .mrz-line{
+    font-family: 'Space Mono', monospace;
+    font-size: 15px;
+    color: var(--ink);
+    letter-spacing: 1.5px;
+    white-space: pre;
+    line-height: 1.9;
+    position:relative; z-index:1;
+  }
+  .copy-row{ display:flex; justify-content:flex-end; margin-top:10px; }
+  .copy-row button{ padding: 7px 14px; font-size:12px; }
+
+  .result-list{ margin-top: 16px; display:flex; flex-direction:column; gap:6px; }
+  .result-row{
+    display:flex; justify-content:space-between; align-items:center;
+    font-family:'Space Mono',monospace; font-size:12.5px;
+    padding: 7px 10px; border-radius:4px;
+    background: rgba(255,255,255,0.03);
+  }
+  .result-row .label{ color: var(--muted); font-family:'IBM Plex Sans',sans-serif; font-size:12px; }
+  .tag{
+    padding: 2px 8px; border-radius: 3px; font-size:11px; font-weight:700;
+    letter-spacing:0.03em;
+  }
+  .tag.ok{ background: rgba(79,157,105,0.18); color:#7dcf95; }
+  .tag.bad{ background: rgba(193,80,63,0.18); color:#e8897a; }
+
+  .hint{ font-size:11.5px; color: var(--muted); margin-top:4px; line-height:1.5; }
+  .corrected-block{ margin-top:14px; }
+  .corrected-block .mrz-output::after{ content:"CORRECTED"; color: rgba(79,157,105,0.16); }
+
+  footer{ text-align:center; color: var(--muted); font-size: 11px; margin-top: 30px; }
+
+  /* Passport visual */
+  .passport-page{
+    position: relative;
+    background: linear-gradient(135deg, #f4f0e6, #ece5d2);
+    border-radius: 6px;
+    padding: 22px 22px 18px;
+    overflow: hidden;
+    border: 1px solid rgba(184,146,63,0.35);
+  }
+  .passport-watermark{
+    position:absolute; top:42%; left:50%; transform: translate(-50%,-50%) rotate(-18deg);
+    font-size: 54px; font-weight:700; color: rgba(193,80,63,0.13);
+    letter-spacing: 0.12em; pointer-events:none; white-space:nowrap; z-index:0;
+    font-family:'IBM Plex Sans',sans-serif;
+  }
+  .passport-banner{
+    position:relative; z-index:1;
+    text-align:center; font-size: 10.5px; letter-spacing:0.08em;
+    color: #8a5a1f; background: rgba(184,146,63,0.14);
+    border: 1px dashed rgba(184,146,63,0.5);
+    border-radius: 4px; padding: 5px 8px; margin-bottom: 16px;
+    font-weight:600;
+  }
+  .passport-top{ position:relative; z-index:1; display:flex; gap:18px; }
+  .photo-box{
+    flex-shrink:0; width: 110px; height: 140px;
+    border: 1.5px solid rgba(14,26,43,0.35);
+    border-radius: 3px;
+    background: repeating-linear-gradient(45deg, rgba(14,26,43,0.04), rgba(14,26,43,0.04) 6px, transparent 6px, transparent 12px);
+    display:flex; align-items:center; justify-content:center;
+    font-size: 11px; letter-spacing:0.1em; color: rgba(14,26,43,0.4); font-weight:700;
+  }
+  .passport-fields{ flex:1; display:flex; flex-direction:column; gap:10px; }
+  .pf-row{ display:flex; gap:14px; flex-wrap:wrap; }
+  .pf{ display:flex; flex-direction:column; gap:1px; }
+  .pf.full{ width:100%; }
+  .pf label{
+    font-size: 8.5px; text-transform:uppercase; letter-spacing:0.08em;
+    color: #8a7550;
+  }
+  .pf div:not(label){
+    font-family:'Space Mono',monospace; font-size: 14px; color: var(--ink);
+    letter-spacing:0.02em; font-weight:700;
+  }
+  .passport-mrz{
+    position:relative; z-index:1; margin-top: 18px;
+    background: rgba(255,255,255,0.55);
+    border-radius: 4px; padding: 10px 12px;
+  }
+  .passport-mrz .mrz-line{ color: var(--ink); font-size: 13.5px; letter-spacing: 1.3px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="brand">
+      <div class="brand-mark">P&lt;</div>
+      <div>
+        <h1>MRZ 產生 / 驗證工具</h1>
+        <div class="sub">TD3 護照格式（ICAO Doc 9303）— UAT 測試資料用</div>
+      </div>
+    </div>
+    <div class="icao">ICAO 9303 · MOD 10<br>WEIGHTS 7 · 3 · 1</div>
+  </header>
+
+  <!-- GENERATOR -->
+  <div class="card">
+    <h2>產生 MRZ</h2>
+    <div class="grid g3">
+      <div class="field">
+        <label>國籍代碼（3碼）</label>
+        <input id="g-country" value="NZL" maxlength="3" style="text-transform:uppercase">
+      </div>
+      <div class="field">
+        <label>性別</label>
+        <select id="g-sex">
+          <option value="M">M</option>
+          <option value="F">F</option>
+          <option value="<">未指定 &lt;</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>護照號碼</label>
+        <input id="g-passno" value="RA1234567" style="text-transform:uppercase">
+      </div>
+      <div class="field full">
+        <label>姓（Surname）</label>
+        <input id="g-surname" value="JOHNSON" style="text-transform:uppercase">
+      </div>
+      <div class="field full">
+        <label>名（Given Names，可多個，空白分隔）</label>
+        <input id="g-given" value="OLIVER JAMES" style="text-transform:uppercase">
+      </div>
+      <div class="field">
+        <label>出生日期</label>
+        <input id="g-dob" type="date" value="1992-06-23">
+      </div>
+      <div class="field">
+        <label>效期到期日</label>
+        <input id="g-exp" type="date" value="2032-04-14">
+      </div>
+      <div class="field">
+        <label>個人號碼（選填，無則留空）</label>
+        <input id="g-personal" value="">
+      </div>
+      <div class="field">
+        <label>簽發地（Place of Issue）</label>
+        <input id="g-place" value="AUCKLAND" style="text-transform:uppercase">
+      </div>
+      <div class="field">
+        <label>簽發日期（Date of Issue）</label>
+        <input id="g-issue-date" type="date" value="2022-04-14">
+      </div>
+      <div class="field">
+        <label>簽發機關（Authority）</label>
+        <input id="g-authority" value="DIA WLG" style="text-transform:uppercase">
+      </div>
+    </div>
+
+    <div class="actions">
+      <button onclick="generate()">產生 MRZ</button>
+      <button class="secondary" onclick="fillSample(2)">帶入範例二（Thompson）</button>
+    </div>
+
+    <div class="mrz-output" id="g-output-wrap" style="display:none">
+      <div class="mrz-line" id="g-line1"></div>
+      <div class="mrz-line" id="g-line2"></div>
+    </div>
+    <div class="copy-row" id="g-copy-row" style="display:none">
+      <button onclick="copyGenerated()">複製兩行 MRZ</button>
+    </div>
+    <div class="hint">個人號碼欄留空時，依慣例該欄檢查碼以 &lt; 填充（不強制計算）。</div>
+  </div>
+
+  <!-- PASSPORT VISUAL -->
+  <div class="card" id="visual-card" style="display:none">
+    <h2>護照樣張（可截圖）</h2>
+    <div class="passport-page">
+      <div class="passport-watermark">SPECIMEN</div>
+      <div class="passport-banner">測試資料 · TEST DOCUMENT · NOT VALID FOR TRAVEL</div>
+      <div class="passport-top">
+        <div class="photo-box">PHOTO</div>
+        <div class="passport-fields">
+          <div class="pf-row">
+            <div class="pf"><label>Type</label><div id="pv-type">P</div></div>
+            <div class="pf"><label>Country Code</label><div id="pv-country">NZL</div></div>
+            <div class="pf"><label>Passport No.</label><div id="pv-passno">RA1234567</div></div>
+          </div>
+          <div class="pf full"><label>Surname</label><div id="pv-surname">JOHNSON</div></div>
+          <div class="pf full"><label>Given Names</label><div id="pv-given">OLIVER JAMES</div></div>
+          <div class="pf-row">
+            <div class="pf"><label>Nationality</label><div id="pv-nationality">NZL</div></div>
+            <div class="pf"><label>Date of Birth</label><div id="pv-dob">23 JUN 1992</div></div>
+            <div class="pf"><label>Sex</label><div id="pv-sex">M</div></div>
+          </div>
+          <div class="pf-row">
+            <div class="pf"><label>Place of Issue</label><div id="pv-place">AUCKLAND</div></div>
+            <div class="pf"><label>Date of Issue</label><div id="pv-issuedate">14 APR 2022</div></div>
+          </div>
+          <div class="pf-row">
+            <div class="pf"><label>Date of Expiry</label><div id="pv-expiry">14 APR 2032</div></div>
+            <div class="pf"><label>Authority</label><div id="pv-authority">DIA WLG</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="passport-mrz">
+        <div class="mrz-line" id="pv-mrz1"></div>
+        <div class="mrz-line" id="pv-mrz2"></div>
+      </div>
+    </div>
+    <div class="hint">此樣張僅供系統測試截圖使用，非任何真實國家護照之設計樣式。</div>
+  </div>
+
+  <!-- VALIDATOR -->
+  <div class="card">
+    <h2>驗證既有 MRZ</h2>
+    <div class="field full">
+      <label>貼上兩行 MRZ（每行 44 碼）</label>
+      <textarea id="v-input" placeholder="P<NZLJOHNSON<<OLIVER<JAMES<<<<<<<<<<<<<<<<<<
+RA1234567<6NZL9206235M3204142<<<<<<<<<<<<<<<02"></textarea>
+    </div>
+    <div class="actions">
+      <button onclick="validate()">驗證檢查碼</button>
+      <button class="secondary" onclick="v_fillSample()">帶入上傳圖片範例</button>
+    </div>
+
+    <div class="result-list" id="v-results"></div>
+
+    <div class="corrected-block" id="v-corrected" style="display:none">
+      <div class="hint" style="margin-bottom:8px">修正後版本：</div>
+      <div class="mrz-output">
+        <div class="mrz-line" id="v-fixed1"></div>
+        <div class="mrz-line" id="v-fixed2"></div>
+      </div>
+      <div class="copy-row">
+        <button onclick="copyFixed()">複製修正版</button>
+      </div>
+    </div>
+  </div>
+
+  <footer>純前端計算，資料不會送出或儲存 · MOD 10 checksum, ICAO Doc 9303 Part 4</footer>
+</div>
+
+<script>
+const WEIGHTS = [7,3,1];
+
+function charVal(c){
+  if(c >= '0' && c <= '9') return c.charCodeAt(0) - 48;
+  if(c === '<') return 0;
+  if(c >= 'A' && c <= 'Z') return c.charCodeAt(0) - 65 + 10;
+  return 0;
+}
+function checkDigit(str){
+  let sum = 0;
+  for(let i=0;i<str.length;i++){
+    sum += charVal(str[i]) * WEIGHTS[i % 3];
+  }
+  return String(sum % 10);
+}
+function pad(str, len){
+  str = (str||'').toUpperCase().slice(0,len);
+  return str.padEnd(len,'<');
+}
+function dateToYYMMDD(dateStr){
+  // dateStr = "YYYY-MM-DD"
+  const [y,m,d] = dateStr.split('-');
+  return y.slice(2) + m + d;
+}
+const MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+function dateToDisplay(dateStr){
+  // "YYYY-MM-DD" -> "DD MON YYYY"
+  if(!dateStr) return '';
+  const [y,m,d] = dateStr.split('-');
+  return `${d} ${MONTHS[parseInt(m,10)-1]} ${y}`;
+}
+
+function buildLine1(country, surname, given){
+  const surPart = surname.toUpperCase().replace(/[^A-Z]/g,'');
+  const givenPart = given.toUpperCase().trim().split(/\s+/).filter(Boolean).join('<');
+  const nameField = surPart + '<<' + givenPart;
+  let line = 'P<' + pad(country,3) + nameField;
+  return pad(line, 44);
+}
+
+function buildLine2(passNo, country, dob, sex, exp, personal){
+  const passNo9 = pad(passNo, 9);
+  const passCheck = checkDigit(passNo9);
+  const dob6 = dateToYYMMDD(dob);
+  const dobCheck = checkDigit(dob6);
+  const exp6 = dateToYYMMDD(exp);
+  const expCheck = checkDigit(exp6);
+  const personal14 = pad(personal, 14);
+  const personalIsBlank = personal14 === '<<<<<<<<<<<<<<';
+  const personalCheck = personalIsBlank ? '<' : checkDigit(personal14);
+
+  const compositeInput = passNo9 + passCheck + dob6 + dobCheck + exp6 + expCheck + personal14 + personalCheck;
+  const compositeCheck = checkDigit(compositeInput);
+
+  return passNo9 + passCheck + pad(country,3) + dob6 + dobCheck + sex + exp6 + expCheck + personal14 + personalCheck + compositeCheck;
+}
+
+function generate(){
+  const country = document.getElementById('g-country').value;
+  const sex = document.getElementById('g-sex').value;
+  const passNo = document.getElementById('g-passno').value;
+  const surname = document.getElementById('g-surname').value;
+  const given = document.getElementById('g-given').value;
+  const dob = document.getElementById('g-dob').value;
+  const exp = document.getElementById('g-exp').value;
+  const personal = document.getElementById('g-personal').value;
+
+  if(!country || !passNo || !surname || !given || !dob || !exp){
+    alert('請完整填寫必要欄位（個人號碼可留空）');
+    return;
+  }
+
+  const line1 = buildLine1(country, surname, given);
+  const line2 = buildLine2(passNo, country, dob, sex, exp, personal);
+
+  document.getElementById('g-line1').textContent = line1;
+  document.getElementById('g-line2').textContent = line2;
+  document.getElementById('g-output-wrap').style.display = 'block';
+  document.getElementById('g-copy-row').style.display = 'flex';
+
+  // populate passport visual
+  const place = document.getElementById('g-place').value;
+  const issueDate = document.getElementById('g-issue-date').value;
+  const authority = document.getElementById('g-authority').value;
+
+  document.getElementById('pv-country').textContent = country.toUpperCase();
+  document.getElementById('pv-passno').textContent = passNo.toUpperCase();
+  document.getElementById('pv-surname').textContent = surname.toUpperCase();
+  document.getElementById('pv-given').textContent = given.toUpperCase();
+  document.getElementById('pv-nationality').textContent = country.toUpperCase();
+  document.getElementById('pv-dob').textContent = dateToDisplay(dob);
+  document.getElementById('pv-sex').textContent = sex;
+  document.getElementById('pv-place').textContent = place.toUpperCase();
+  document.getElementById('pv-issuedate').textContent = dateToDisplay(issueDate);
+  document.getElementById('pv-expiry').textContent = dateToDisplay(exp);
+  document.getElementById('pv-authority').textContent = authority.toUpperCase();
+  document.getElementById('pv-mrz1').textContent = line1;
+  document.getElementById('pv-mrz2').textContent = line2;
+  document.getElementById('visual-card').style.display = 'block';
+}
+
+function copyGenerated(){
+  const l1 = document.getElementById('g-line1').textContent;
+  const l2 = document.getElementById('g-line2').textContent;
+  navigator.clipboard.writeText(l1 + '\n' + l2);
+}
+
+function fillSample(n){
+  if(n===2){
+    document.getElementById('g-country').value='NZL';
+    document.getElementById('g-sex').value='F';
+    document.getElementById('g-passno').value='RA9876543';
+    document.getElementById('g-surname').value='THOMPSON';
+    document.getElementById('g-given').value='EMILY SOPHIE';
+    document.getElementById('g-dob').value='1997-02-08';
+    document.getElementById('g-exp').value='2033-05-20';
+    document.getElementById('g-personal').value='';
+    document.getElementById('g-place').value='WELLINGTON';
+    document.getElementById('g-issue-date').value='2023-05-20';
+    document.getElementById('g-authority').value='DIA WLG';
+    generate();
+  }
+}
+
+function v_fillSample(){
+  document.getElementById('v-input').value =
+"P<NZLJOHNSON<<OLIVER<JAMES<<<<<<<<<<<<<<<<<<\nRA1234567<6NZL9206235M3204142<<<<<<<<<<<<<<<02";
+}
+
+function resultRow(label, expected, actual){
+  const ok = expected === actual;
+  return `<div class="result-row">
+    <span class="label">${label}　實際: <b>${actual==='' ? '(空)' : actual}</b>　應為: <b>${expected}</b></span>
+    <span class="tag ${ok?'ok':'bad'}">${ok ? '正確' : '錯誤'}</span>
+  </div>`;
+}
+
+function validate(){
+  const raw = document.getElementById('v-input').value.trim();
+  const lines = raw.split('\n').map(l=>l.trim()).filter(Boolean);
+  const resultsEl = document.getElementById('v-results');
+  const correctedEl = document.getElementById('v-corrected');
+
+  if(lines.length < 2){
+    resultsEl.innerHTML = '<div class="result-row"><span class="label">請貼上完整兩行 MRZ</span></div>';
+    correctedEl.style.display='none';
+    return;
+  }
+
+  let line1 = lines[0].toUpperCase();
+  let line2 = lines[1].toUpperCase();
+
+  if(line1.length !== 44 || line2.length !== 44){
+    resultsEl.innerHTML = `<div class="result-row"><span class="label">⚠ 長度不符 TD3 規格（每行需 44 碼）— 第一行 ${line1.length} 碼／第二行 ${line2.length} 碼。以下驗證僅供參考，欄位可能因位移而不準確。</span></div>`;
+  } else {
+    resultsEl.innerHTML = '';
+  }
+
+  // parse line2 fields per spec positions (0-indexed)
+  const passNo9 = line2.slice(0,9);
+  const passCheckActual = line2.slice(9,10);
+  const country = line2.slice(10,13);
+  const dob6 = line2.slice(13,19);
+  const dobCheckActual = line2.slice(19,20);
+  const sex = line2.slice(20,21);
+  const exp6 = line2.slice(21,27);
+  const expCheckActual = line2.slice(27,28);
+  const personal14 = line2.slice(28,42);
+  const personalCheckActual = line2.slice(42,43);
+  const compositeCheckActual = line2.slice(43,44);
+
+  const passCheckExpected = checkDigit(passNo9);
+  const dobCheckExpected = checkDigit(dob6);
+  const expCheckExpected = checkDigit(exp6);
+  const personalIsBlank = personal14.replace(/</g,'') === '';
+  const personalCheckExpected = personalIsBlank ? '<' : checkDigit(personal14);
+  const compositeInput = passNo9 + passCheckExpected + dob6 + dobCheckExpected + exp6 + expCheckExpected + personal14 + personalCheckExpected;
+  const compositeCheckExpected = checkDigit(compositeInput);
+
+  resultsEl.innerHTML += resultRow('護照號碼檢查碼', passCheckExpected, passCheckActual);
+  resultsEl.innerHTML += resultRow('出生日期檢查碼', dobCheckExpected, dobCheckActual);
+  resultsEl.innerHTML += resultRow('效期檢查碼', expCheckExpected, expCheckActual);
+  resultsEl.innerHTML += resultRow('個人號碼檢查碼', personalCheckExpected, personalCheckActual);
+  resultsEl.innerHTML += resultRow('總合檢查碼', compositeCheckExpected, compositeCheckActual);
+
+  const allOk = [
+    [passCheckExpected,passCheckActual],
+    [dobCheckExpected,dobCheckActual],
+    [expCheckExpected,expCheckActual],
+    [personalCheckExpected,personalCheckActual],
+    [compositeCheckExpected,compositeCheckActual]
+  ].every(([e,a])=>e===a);
+
+  if(!allOk){
+    const fixedLine2 = passNo9 + passCheckExpected + country + dob6 + dobCheckExpected + sex + exp6 + expCheckExpected + personal14 + personalCheckExpected + compositeCheckExpected;
+    document.getElementById('v-fixed1').textContent = line1;
+    document.getElementById('v-fixed2').textContent = fixedLine2;
+    correctedEl.style.display = 'block';
+  } else {
+    correctedEl.style.display = 'none';
+  }
+}
+
+function copyFixed(){
+  const l1 = document.getElementById('v-fixed1').textContent;
+  const l2 = document.getElementById('v-fixed2').textContent;
+  navigator.clipboard.writeText(l1 + '\n' + l2);
+}
+
+// init
+generate();
+</script>
+</body>
+</html>
